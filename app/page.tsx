@@ -19,6 +19,7 @@ export default function Home() {
  const host=room?.isHost||role==="host",joined=!!auth,phase=room?.phase,seconds=room?Math.min(30,Math.max(0,Math.ceil((room.deadline-now)/1000))):30;
  const countdown=room?Math.max(0,Math.ceil((room.startsAt-now)/1000)):0;
  const preparing=phase==="question"&&(countdown>0||!room?.question);
+ useEffect(()=>{if(phase==="finished"||(phase==="question"&&preparing))window.scrollTo({top:0,behavior:"instant"});},[phase,room?.round]);
  useEffect(()=>{const sync=()=>setFullscreen(!!document.fullscreenElement);document.addEventListener("fullscreenchange",sync);return()=>document.removeEventListener("fullscreenchange",sync)},[]);
  async function toggleFullscreen(){try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{setError("Full screen is not available in this browser.")}}
  useEffect(()=>{if(!help)return;const old=document.body.style.overflow;document.body.style.overflow="hidden";return()=>{document.body.style.overflow=old;helpButton.current?.focus()}},[help]);
@@ -37,4 +38,5 @@ export default function Home() {
  {help&&<div className="modal-backdrop" onClick={()=>setHelp(false)}><section ref={dialog} className="modal panel" onKeyDown={e=>{if(e.key==="Escape"){setHelp(false);return}if(e.key==="Tab"){const nodes=dialog.current?.querySelectorAll<HTMLElement>("button,a[href],input");if(nodes?.length){const first=nodes[0],last=nodes[nodes.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}}}} role="dialog" aria-modal="true" aria-labelledby="help-title" onClick={e=>e.stopPropagation()}><button className="close" autoFocus aria-label="Close instructions" onClick={()=>setHelp(false)}><X/></button><span className="small-label">EVERYONE CAN PLAY</span><h2 id="help-title">A quick guide to the game.</h2><ol><li><strong>Host a room.</strong> Select Create a game and show the QR code on a shared screen.</li><li><strong>Join on your phone.</strong> Scan the code or enter the room code, then choose a display name.</li><li><strong>Answer together.</strong> The host starts each round. Choose one of four answers within 30 seconds.</li><li><strong>Celebrate the learning.</strong> A correct answer earns 1,000 points. The leaderboard appears after each round. Equal scores share a rank.</li></ol><p>The host runs the screen and does not answer. To play too, join from a second device. There are 10 beginner-friendly questions, and rooms stay available for 24 hours.</p><button className="primary" onClick={()=>setHelp(false)}>Got it <Check size={18}/></button></section></div>}
  </div>
 }
+
 

@@ -1,4 +1,6 @@
 import vinext from "vinext";
+import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { readExecutionProfile } from "./scripts/execution-profile.mjs";
@@ -52,6 +54,7 @@ export default defineConfig(async ({ command }) => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
+
     server: {
       ...(managedLinux
         ? { host: "0.0.0.0", allowedHosts: ["terminal.local"] }
@@ -61,6 +64,7 @@ export default defineConfig(async ({ command }) => {
         : {}),
     },
     plugins: [
+      { name: "sites-game-runtime", enforce: "pre", load(id: string) { if (id.replaceAll("\\", "/").endsWith("/lib/game-runtime.ts")) return readFileSync(new URL("./lib/game-cloudflare.ts", import.meta.url), "utf8"); } },
       vinext(),
       sites({ mockAuth: !managedLinux }),
       connectorPreview(),
@@ -98,3 +102,5 @@ export default defineConfig(async ({ command }) => {
     ],
   };
 });
+
+
