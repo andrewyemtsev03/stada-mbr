@@ -22,10 +22,11 @@ export async function GET(request:Request) {
     const count=await env.DB!.prepare("SELECT COUNT(*) AS n FROM answers WHERE room=? AND round=?").bind(code,r.round).first<any>();
     const mine=me?await env.DB!.prepare("SELECT choice,points FROM answers WHERE player=? AND round=?").bind(auth,r.round).first<any>():null;
     const q=questions[r.round], revealed=r.phase==="reveal"||r.phase==="finished";
-    return json({code,phase:r.phase,round:r.round,deadline:r.deadline,serverNow:Date.now(),isHost,name:me?.name,me:me?.token,
-      players:rows.results.map((p:any,i:number,all:any[])=>({id:p.token===auth?"me":String(p.joined)+"-"+i,name:p.name,score:p.score,rank:all.findIndex(x=>x.score===p.score)+1})),
+    const startsAt=r.deadline-30000, preparing=r.phase==="question"&&Date.now()<startsAt;
+    return json({code,phase:r.phase,round:r.round,deadline:r.deadline,startsAt,serverNow:Date.now(),isHost,name:me?.name,
+      players:await Promise.all(rows.results.map(async(p:any,i:number,all:any[])=>({id:await hash(p.token),isMe:p.token===auth,name:p.name,score:p.score,rank:all.findIndex(x=>x.score===p.score)+1}))),
       answered:count?.n||0,mine:mine?{choice:mine.choice,...(revealed?{points:mine.points}:{})}:null,
-      question:r.phase==="lobby"?null:{text:q.text,category:q.category,options:q.options,...(revealed?{correct:q.correct,explanation:q.explanation}:{})}});
+      question:r.phase==="lobby"||preparing?null:{text:q.text,category:q.category,options:q.options,...(revealed?{correct:q.correct,explanation:q.explanation}:{})}});
   } catch { return fail("The room is temporarily unavailable. Please try again.",503); }
 }
 export async function POST(request:Request) {
@@ -53,6 +54,7 @@ export async function POST(request:Request) {
     }
     const auth=request.headers.get("Authorization")?.replace("Bearer ","")||"";
     if(b.action==="answer"){
+      if(Date.now()<r.deadline-30000)return fail("Get ready! The question is about to start.");
       if(!Number.isInteger(b.choice)||b.choice<0||b.choice>3||b.round!==r.round)return fail("That answer is no longer available.");
       const points=b.choice===questions[r.round].correct?1000:0;
       const result=await db.prepare("INSERT OR IGNORE INTO answers(player,room,round,choice,points) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM players WHERE token=? AND room=?) AND EXISTS(SELECT 1 FROM rooms WHERE code=? AND phase='question' AND round=? AND deadline>?)").bind(auth,code,r.round,b.choice,points,auth,code,code,r.round,Date.now()).run();
@@ -63,12 +65,13 @@ export async function POST(request:Request) {
     if(b.action==="start"&&r.phase==="lobby"){
       const n=await db.prepare("SELECT COUNT(*) AS n FROM players WHERE room=?").bind(code).first<any>();
       if(!n?.n)return fail("Wait for at least one player to join.");
-      await db.prepare("UPDATE rooms SET phase='question',deadline=? WHERE code=? AND phase='lobby'").bind(Date.now()+30000,code).run();
+      await db.prepare("UPDATE rooms SET phase='question',deadline=? WHERE code=? AND phase='lobby'").bind(Date.now()+34000,code).run();
     } else if(b.action==="reveal"&&b.round===r.round&&r.phase==="question"){
+      if(Date.now()<r.deadline-30000)return fail("Wait for the countdown to finish.");
       await db.prepare("UPDATE rooms SET phase='reveal' WHERE code=? AND round=? AND phase='question'").bind(code,r.round).run();
     } else if(b.action==="next"&&b.round===r.round&&r.phase==="reveal"){
       if(r.round===9)await db.prepare("UPDATE rooms SET phase='finished' WHERE code=? AND phase='reveal' AND round=9").bind(code).run();
-      else await db.prepare("UPDATE rooms SET phase='question',round=round+1,deadline=? WHERE code=? AND phase='reveal' AND round=?").bind(Date.now()+30000,code,r.round).run();
+      else await db.prepare("UPDATE rooms SET phase='question',round=round+1,deadline=? WHERE code=? AND phase='reveal' AND round=?").bind(Date.now()+34000,code,r.round).run();
     } else return fail("The room has moved on. Please try again.");
     return json({ok:true});
   } catch {return fail("Something went wrong. Please try again.",503);}
